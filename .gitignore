@@ -1,0 +1,11 @@
+__pycache__/
+.idea/
+viz/
+viz_train/
+
+*.params
+*.mat
+*.json
+*.log
+*.py[cod]
+	
