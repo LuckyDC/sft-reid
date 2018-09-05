@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import os
 import argparse
 import numpy as np
 import mxnet as mx
@@ -49,6 +50,7 @@ def extract_feature(model, iterator):
 
 
 if __name__ == '__main__':
+    os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--prefix", type=str, required=True)
@@ -68,7 +70,7 @@ if __name__ == '__main__':
 
     symbol, arg_params, aux_params = mx.model.load_checkpoint(load_model_prefix, args.epoch_idx)
     flatten = symbol.get_internals()["flatten_output"]
-    model = mx.mod.Module(symbol=flatten, context=context)
+    model = mx.mod.Module(symbol=flatten, data_names=["data"], label_names=None, context=context)
     model.bind(data_shapes=[('data', (args.batch_size, 3) + image_size)], for_training=False, force_rebind=True)
 
     model.set_params(arg_params, aux_params, allow_missing=True, allow_extra=True)
