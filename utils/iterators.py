@@ -17,6 +17,7 @@ except ImportError:
     from Queue import Queue
 
 from mxnet.io import DataBatch, DataIter
+import utils.augmentor as augmentor
 
 
 def pop(x, size):
@@ -24,7 +25,7 @@ def pop(x, size):
 
 
 def get_train_iterator(root, p_size, k_size, image_size, random_mirror=False, random_crop=False, random_erase=False,
-                       num_work=4, seed=None):
+                       num_worker=4, seed=None):
     transforms = []
     transforms.append(augmentor.Cast("float32"))
 
@@ -42,7 +43,7 @@ def get_train_iterator(root, p_size, k_size, image_size, random_mirror=False, ra
     transform = augmentor.Compose(transforms)
 
     train = TrainIterator(data_dir=root, p_size=p_size, k_size=k_size,
-                          transform=transform, num_worker=num_work, image_size=image_size, random_seed=seed)
+                          transform=transform, num_worker=num_worker, image_size=image_size, random_seed=seed)
 
     return train
 

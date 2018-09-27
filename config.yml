@@ -4,7 +4,7 @@
 p_size: 16
 k_size: 8
 
-gpus: [7]
+gpus: [0]
 memonger: false
 # settings for optimizer
 optimizer: sgd
@@ -22,7 +22,7 @@ random_erase: true
 
 
 #settings for model
-prefix: baseline-gcn0.05-dsup-amsoftmax0.3-relu-1-140ep
+prefix: baseline-gbms0.1-dsup-amsoftmax0.3-relu-crop-140ep
 
 network: resnet_s16
 
@@ -35,7 +35,7 @@ num_epoch: 140
 # settings for gcn
 use_gbms: true
 deep_sup: true
-temperature: 0.05
+temperature: 0.1
 
 
 # settings for base architecture

@@ -7,7 +7,6 @@ import importlib
 
 from pprint import pprint
 
-import utils.augmentor as augmentor
 from utils.sub_module import *
 from utils.misc import DotDict
 from utils.misc import clean_immediate_checkpoints
@@ -133,6 +132,7 @@ if __name__ == '__main__':
                                     random_erase=args.random_erase,
                                     random_mirror=args.random_mirror,
                                     random_crop=args.random_crop,
+                                    num_worker=8,
                                     seed=random_seed)
 
     assert train.num_id == num_id
