@@ -17,7 +17,7 @@ dataset: duke
 image_size: [256,128]
 
 random_mirror: true
-random_crop: false
+random_crop: true
 random_erase: true
 
 

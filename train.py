@@ -125,15 +125,15 @@ if __name__ == '__main__':
 
     devices = [mx.gpu(i) for i in gpus]
 
-    train, val = get_train_iterator(root=data_dir,
-                                    p_size=p_size,
-                                    k_size=k_size,
-                                    image_size=image_size,
-                                    random_erase=args.random_erase,
-                                    random_mirror=args.random_mirror,
-                                    random_crop=args.random_crop,
-                                    num_worker=8,
-                                    seed=random_seed)
+    train = get_train_iterator(root=data_dir,
+                               p_size=p_size,
+                               k_size=k_size,
+                               image_size=image_size,
+                               random_erase=args.random_erase,
+                               random_mirror=args.random_mirror,
+                               random_crop=args.random_crop,
+                               num_worker=8,
+                               seed=random_seed)
 
     assert train.num_id == num_id
 
@@ -186,7 +186,6 @@ if __name__ == '__main__':
                           logger=logger)
 
     model.fit(train_data=train,
-              eval_data=None,
               eval_metric=metric,
               validation_metric=metric,
               arg_params=arg_params,
