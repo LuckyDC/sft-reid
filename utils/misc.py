@@ -1,19 +1,15 @@
+from __future__ import division, print_function
 import os
 import glob
-import cv2
 import numpy as np
 import mxnet as mx
+from mxnet.metric import EvalMetric
 
-import matplotlib as mpl
-from mxnet.metric import EvalMetric, check_label_shapes
 
-mpl.use("Agg")
-
-import matplotlib.pyplot as plt
-
-from collections import namedtuple
-
-Record = namedtuple('Record', ['index', 'class_id', 'cam_id', 'img_path'])
+class DotDict(dict):
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
 
 
 def clean_immediate_checkpoints(model_dir, prefix, final_epoch):
@@ -36,40 +32,12 @@ def euclidean_dist(x, y, eps=1e-12, squared=False):
     return dist if not squared else mx.nd.sqrt(dist)
 
 
-def viz_heatmap(data, name):
-    maximum = np.max(data)
-    # minimun = np.min(data)
-
-    plt.figure(0)
-
-    data = data / maximum * 255
-    heat_map = cv2.applyColorMap(data.astype(np.uint8), cv2.COLORMAP_JET)[:, :, [2, 1, 0]]
-    plt.imshow(heat_map)
-    plt.savefig("%s.jpg" % name)
-
-    plt.close(0)
-
-
-def load_lst(lst_path):
-    lines = []
-    with open(lst_path, "r") as fin:
-        for line in fin:
-            idx, class_id, img_path = line.strip().split('\t')
-
-            cam_id = os.path.splitext(os.path.basename(img_path))[0].split('_')[1][1]
-            idx = int(idx)
-            class_id = int(class_id)
-            cam_id = int(cam_id)
-            lines.append(Record(idx, class_id, cam_id, img_path))
-    return lines
-
-
 class CustomAccuracy(EvalMetric):
-    def __init__(self, name='accuracy', deep_sup=False,
+    def __init__(self, batch_size, name='accuracy',
                  output_names=None, label_names=None):
         super(CustomAccuracy, self).__init__(name, output_names=output_names, label_names=label_names)
 
-        self.deep_sup = deep_sup
+        self.batch_size = batch_size
 
     def update(self, labels, preds):
 
@@ -80,28 +48,24 @@ class CustomAccuracy(EvalMetric):
             pred_label = pred_label.asnumpy().astype('int32')
             label = label.asnumpy().astype('int32')
 
-            if self.deep_sup:
-                pred_label = pred_label[:pred_label.shape[0] // 2]
+            pred_label = pred_label[:self.batch_size]
 
             self.sum_metric += np.equal(pred_label, label).sum()
             self.num_inst += len(pred_label)
 
 
 class CustomCrossEntropy(EvalMetric):
-    def __init__(self, eps=1e-12, name='cross-entropy', deep_sup=False,
-                 output_names=None, label_names=None):
+    def __init__(self, batch_size, eps=1e-12, name='cross-entropy', output_names=None, label_names=None):
         super(CustomCrossEntropy, self).__init__(name, eps=eps, output_names=output_names, label_names=label_names)
         self.eps = eps
-        self.deep_sup = deep_sup
+        self.batch_size = batch_size
 
     def update(self, labels, preds):
         for label, pred in zip(labels, preds):
             label = label.asnumpy()
             pred = pred.asnumpy()
 
-            if self.deep_sup:
-                label = np.tile(label, 2)
-
+            pred = pred[:self.batch_size]
             label = label.ravel()
             assert label.shape[0] == pred.shape[0]
 

@@ -72,7 +72,7 @@ def classification_branch(data, trans_data, label, num_id, margin=0.5, **kwargs)
     return am_softmax, plain_softmax
 
 
-def independent_classification_branch(data, label, num_id, margin=0.5, postfix="", **kwargs):
+def independent_classification_branch(data, label, num_id, margin=0.5, name="", **kwargs):
     bottleneck_dims = kwargs.get("bottleneck_dims", 512)
     norm_scale = kwargs.get("norm_scale", 1.0)
 
@@ -84,7 +84,7 @@ def independent_classification_branch(data, label, num_id, margin=0.5, postfix="
     l2 = mx.symbol.L2Normalization(act)
 
     am_softmax, plain_softmax = amsoftmax(l2, label=label, num_dims=bottleneck_dims, scale=norm_scale,
-                                          num_id=num_id, margin=margin, postfix=postfix)
+                                          num_id=num_id, margin=margin, postfix=name)
 
     return am_softmax, plain_softmax
 
@@ -155,3 +155,5 @@ def pcb_branch(data, label, num_part, num_hidden, num_id):
 def nuclear_regularizer(data, grad_scale=1.0, name="nuclear_reg"):
     loss = mx.symbol.MakeLoss(mx.symbol.diag(data), grad_scale=grad_scale, name=name)
     return loss
+
+

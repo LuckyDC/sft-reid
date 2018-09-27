@@ -1,26 +1,20 @@
 from __future__ import print_function, division
 
-import sys
 import os
 import logging
 import yaml
 import importlib
-import subprocess
-import mxnet as mx
-from easydict import EasyDict
+
 from pprint import pprint
 
 import utils.augmentor as augmentor
 from utils.sub_module import *
+from utils.misc import DotDict
 from utils.misc import clean_immediate_checkpoints
 from utils.misc import CustomAccuracy, CustomCrossEntropy
-from utils.group_iterator import GroupIterator
-from utils.plain_iterator import PlainIterator
+from utils.iterators import get_train_iterator
 from utils.memonger import search_plan
-from utils.lr_scheduler import WarmupMultiFactorScheduler, ExponentialScheduler
-
-# operators
-import operators.triplet_loss
+from utils.lr_scheduler import WarmupMultiFactorScheduler
 
 
 def build_network(symbol, num_id, p_size, **kwargs):
@@ -30,6 +24,7 @@ def build_network(symbol, num_id, p_size, **kwargs):
     triplet_margin = kwargs.get("triplet_margin", 0.5)
     softmax_margin = kwargs.get("softmax_margin", 0.5)
     use_verification = kwargs.get("use_verification", False)
+    batch_size = kwargs.get("batch_size", 0)
 
     label = mx.symbol.Variable(name="softmax_label")
 
@@ -37,14 +32,14 @@ def build_network(symbol, num_id, p_size, **kwargs):
 
     pooling = mx.symbol.Pooling(data=symbol, kernel=(1, 1), global_pool=True, pool_type='avg', name='global_pool')
     flatten = mx.symbol.Flatten(data=pooling, name='flatten')
+    # flatten = mx.sym.BatchNorm(data=flatten, fix_gamma=False, eps=2e-5, momentum=0.9, name='flatten')
 
     flatten_gbms, sim, aff = gbms_block(flatten, sim_normalize=True, **kwargs)
 
     # triplet loss
     if use_triplet:
         data_triplet = mx.sym.L2Normalization(flatten, name="triplet_l2") if triplet_normalization else flatten
-        triplet = mx.symbol.Custom(data=data_triplet, p_size=p_size, margin=triplet_margin, op_type='TripletLoss',
-                                   name='triplet')
+        triplet = triplet_hard_loss(data_triplet, label, margin=triplet_margin, batch_size=batch_size)
         group.append(triplet)
 
     # softmax cross entropy loss
@@ -53,51 +48,22 @@ def build_network(symbol, num_id, p_size, **kwargs):
                                         **kwargs)
         group.extend(softmax)
 
+        # softmax = independent_classification_branch(flatten, label=label, num_id=num_id, margin=softmax_margin,
+        #                                             **kwargs)
+        # softmax_gbms = independent_classification_branch(flatten, label=label, num_id=num_id, margin=softmax_margin,
+        #                                                  name="gbms", **kwargs)
+        # group.extend(softmax)
+        # group.extend(softmax_gbms)
+
     if use_verification:
         veri = verification_branch(sim, label, p_size, k_size, name="veri")
         group.append(veri)
 
+    # if use_pcb:
+    #     cls_softmax = pcb_branch(symbol,label,num_part=3,num_hidden=512,num_id=num_id)
+    #     group.extend(cls_softmax)
+
     return mx.symbol.Group(group)
-
-
-def get_iterators(data_dir, p_size, k_size, image_size, aug_dict, seed):
-    random_mirror = aug_dict.get("random_mirror", False)
-    random_crop = aug_dict.get("random_crop", False)
-    random_erasing = aug_dict.get("random_erasing", False)
-    resize_size = aug_dict.get("resize_size", image_size)
-    pad_to_size = aug_dict.get("pad_to_size", None)
-    color_jitter = aug_dict.get("color_jitter", False)
-
-    transforms = []
-    if color_jitter:
-        transforms.append(augmentor.ColorJitter(0.1, 0.1, 0.1, 0))
-
-    transforms.append(augmentor.Cast("float32"))
-
-    resize_size = tuple(resize_size)
-    transforms.append(augmentor.Resize(resize_size))
-
-    if pad_to_size is not None:
-        transforms.append(augmentor.PadTo(pad_to_size, fill_value=127))
-
-    if random_crop:
-        transforms.append(augmentor.RandomCrop(image_size))
-
-    if random_mirror:
-        transforms.append(augmentor.RandomHorizontalFlip())
-
-    if random_erasing:
-        transforms.append(augmentor.RandomErase())
-
-    transform = augmentor.Compose(transforms)
-
-    train = GroupIterator(data_dir=data_dir, p_size=p_size, k_size=k_size,
-                          transform=transform, num_worker=8, image_size=image_size, random_seed=seed)
-
-    # val = GroupIterator(data_dir=os.path.join(data_dir, "bounding_box_test"), p_size=p_size, k_size=k_size,
-    #                     image_size=image_size, random_seed=seed)
-
-    return train, None
 
 
 if __name__ == '__main__':
@@ -114,7 +80,7 @@ if __name__ == '__main__':
         if dataset == selected_dataset:
             args.update(dataset_config)
 
-    args = EasyDict(args)
+    args = DotDict(args)
     pprint(args)
 
     model_load_prefix = args.model_load_prefix
@@ -138,13 +104,13 @@ if __name__ == '__main__':
     num_id = args.num_id
     use_triplet = args.use_triplet
     triplet_margin = args.triplet_margin
-    aug = args.aug
     deep_sup = args.deep_sup
     begin_epoch = args.begin_epoch
     norm_scale = args.norm_scale
     temperature = args.temperature
     softmax_margin = args.softmax_margin
     use_verification = args.use_verification
+    memonger = args.memonger
 
     # config logger
     logging.basicConfig(format="%(asctime)s %(message)s",
@@ -160,8 +126,16 @@ if __name__ == '__main__':
 
     devices = [mx.gpu(i) for i in gpus]
 
-    train, val = get_iterators(data_dir=data_dir, p_size=p_size, k_size=k_size, image_size=image_size, aug_dict=aug,
-                               seed=random_seed)
+    train, val = get_train_iterator(root=data_dir,
+                                    p_size=p_size,
+                                    k_size=k_size,
+                                    image_size=image_size,
+                                    random_erase=args.random_erase,
+                                    random_mirror=args.random_mirror,
+                                    random_crop=args.random_crop,
+                                    seed=random_seed)
+
+    assert train.num_id == num_id
 
     lr_scheduler = WarmupMultiFactorScheduler(step=[s * train.size for s in lr_step], factor=0.1, warmup=True,
                                               warmup_lr=lr / 100, warmup_step=train.size * 20, mode="gradual")
@@ -186,16 +160,16 @@ if __name__ == '__main__':
                         use_triplet=use_triplet, temperature=temperature, triplet_margin=triplet_margin,
                         use_verification=use_verification)
 
-    if batch_size > 128:
+    if memonger:
         net = search_plan(net, data=(batch_size, 3) + tuple(image_size), softmax_label=(batch_size,))
 
     # Metric
     metric_list = []
     if use_softmax:
-        acc = CustomAccuracy(output_names=["softmax_output"], label_names=["softmax_label"], deep_sup=deep_sup,
+        acc = CustomAccuracy(batch_size=batch_size, output_names=["softmax_output"], label_names=["softmax_label"],
                              name="acc")
-        ce_loss = CustomCrossEntropy(output_names=["softmax_output"], label_names=["softmax_label"],
-                                     deep_sup=deep_sup, name="ce")
+        ce_loss = CustomCrossEntropy(batch_size=batch_size, output_names=["softmax_output"],
+                                     label_names=["softmax_label"], name="ce")
         metric_list.extend([acc, ce_loss])
 
     if use_triplet:
@@ -205,9 +179,6 @@ if __name__ == '__main__':
     if use_verification:
         veri_loss = mx.metric.Loss(output_names=["veri_output"], name="veri")
         metric_list.append(veri_loss)
-
-    # ssc = mx.metric.Loss(output_names=["ssc_output"], name="ssc")
-    # metric_list.append(ssc)
 
     metric = mx.metric.CompositeEvalMetric(metrics=metric_list)
 
@@ -232,5 +203,7 @@ if __name__ == '__main__':
 
     clean_immediate_checkpoints("models", prefix, num_epoch)
 
+    # del model
+    #
     # cmd = "python{} eval.py {} {}".format(sys.version[0], gpus[0], "models/" + prefix + "-%04d.params" % num_epoch)
     # subprocess.check_call(cmd.split(" "))

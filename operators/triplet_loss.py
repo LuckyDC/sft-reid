@@ -119,7 +119,7 @@ if __name__ == '__main__':
     Batch = namedtuple("Batch", ['data'])
 
     sys.path.append(".")
-    from utils.group_iterator import GroupIterator
+    from utils.iterators import GroupIterator
 
     mx.random.seed(0)
 

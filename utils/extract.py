@@ -1,14 +1,17 @@
 from __future__ import print_function
 
 import os
+import glob
 import argparse
 import numpy as np
 import mxnet as mx
 import scipy.io as sio
 
 import utils.augmentor as augmentor
-from utils.eval_iterator import EvalIterator
+from utils.iterators import EvalIterator
 from collections import namedtuple
+
+import operators.triplet_loss
 
 Batch = namedtuple('Batch', ['data'])
 
@@ -61,6 +64,7 @@ if __name__ == '__main__':
     parser.add_argument("--query", type=str, required=True)
     parser.add_argument("--gallery", type=str, required=True)
     parser.add_argument("--dataset", type=str, required=True, choices=["duke", "market", "cuhk", "msmt"])
+    parser.add_argument("--distractor", type=str)
     args = parser.parse_args()
 
     context = mx.gpu(args.gpu_id)
@@ -75,13 +79,13 @@ if __name__ == '__main__':
 
     model.set_params(arg_params, aux_params, allow_missing=True, allow_extra=True)
 
+    feat_root = "features/" + args.dataset
+
     # extract query feature
     q_iterator = get_iterator(args.query, args.dataset, args.batch_size, image_size)
 
     q_feat, q_ids, q_cam_ids = extract_feature(model, q_iterator)
     print(q_feat.shape)
-
-    feat_root = "features/" if args.dataset is None else "features/" + args.dataset
 
     save_name = "{}/query-{}".format(feat_root, args.prefix)
     sio.savemat(save_name, {"feat": q_feat, "ids": q_ids, "cam_ids": q_cam_ids})
@@ -94,3 +98,14 @@ if __name__ == '__main__':
 
     save_name = "{}/gallery-{}".format(feat_root, args.prefix)
     sio.savemat(save_name, {"feat": g_feat, "ids": g_ids, "cam_ids": g_cam_ids})
+
+    # extract distractor feature
+    if args.distractor is not None:
+        for i, split in enumerate(sorted(glob.glob(os.path.join(args.distractor, "*")))):
+            d_iterator = get_iterator(split, args.dataset, args.batch_size, image_size)
+
+            d_feat, d_ids, d_cam_ids = extract_feature(model, d_iterator)
+            print(d_feat.shape)
+
+            save_name = "{}/distractor{}-{}".format(feat_root, i + 1, args.prefix)
+            sio.savemat(save_name, {"feat": d_feat, "ids": d_ids, "cam_ids": d_cam_ids})

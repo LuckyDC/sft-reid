@@ -47,6 +47,11 @@ class RandomHorizontalFlip:
         return img
 
 
+class ToTensor:
+    def __call__(self, img):
+        return img / 255
+
+
 class RandomVerticalFlip:
     def __init__(self, p=0.5):
         self.p = p

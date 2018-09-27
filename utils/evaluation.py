@@ -2,16 +2,16 @@ from __future__ import print_function, division
 
 import numba
 import numpy as np
+import mxnet as mx
 
 from tqdm import tqdm
-from sklearn.metrics import euclidean_distances
-from sklearn.preprocessing import normalize
+from utils.misc import euclidean_dist
 
 
-@numba.jit(nopython=True, nogil=True)
+@numba.jit
 def compute_ap(good_index, junk_index, sort_index):
-    cmc = np.zeros((len(sort_index),))
-    n_good = len(good_index)
+    cmc = np.zeros((sort_index.shape[0],))
+    n_good = good_index.shape[0]
 
     old_recall = 0
     old_precision = 1.0
@@ -20,7 +20,7 @@ def compute_ap(good_index, junk_index, sort_index):
     j = 0
     good_now = 0
     n_junk = 0
-    for i in range(len(sort_index)):
+    for i in range(sort_index.shape[0]):
         flag = 0
         if np.any(good_index == sort_index[i]):
             cmc[i - n_junk:] = 1
@@ -47,37 +47,40 @@ def compute_ap(good_index, junk_index, sort_index):
     return ap, cmc
 
 
-def eval_feature(query_features, gallery_features, query_ids, query_cam_ids, gallery_ids, gallery_cam_ids,
-                 metric="euclidean"):
+def eval_feature(query_features, gallery_features, query_ids, query_cam_ids, gallery_ids, gallery_cam_ids, ctx,
+                 metric="cosine"):
     if metric not in ["euclidean", "cosine"]:
-        raise ValueError("Invalid metric! ")
+        raise ValueError("Invalid metric!")
 
-    num_query = len(query_ids)
-    num_gallery = len(gallery_ids)
+    num_query = query_ids.shape[0]
+    num_gallery = gallery_ids.shape[0]
+
+    gallery_features = mx.nd.array(gallery_features, ctx=ctx)
+    query_features = mx.nd.array(query_features, ctx=ctx)
 
     if metric == "cosine":
-        gallery_features = normalize(gallery_features, axis=1)
-        query_features = normalize(query_features, axis=1)
+        gallery_features = mx.nd.L2Normalization(gallery_features)
+        query_features = mx.nd.L2Normalization(query_features)
+        dist_array = -mx.nd.dot(query_features, gallery_features.T).asnumpy()
+
+    elif metric == "euclidean":
+        dist_array = euclidean_dist(query_features, gallery_features, eps=0).asnumpy()
 
     ap = np.zeros((num_query,))  # average precision
     cmc = np.zeros((num_query, num_gallery))
 
     index = np.arange(num_gallery)
     for i in tqdm(range(num_query)):
-        q_feat = query_features[i]
-
         good_flag = np.logical_and(np.not_equal(gallery_cam_ids, query_cam_ids[i]), np.equal(gallery_ids, query_ids[i]))
-        junk_flag_1 = np.logical_or(np.equal(gallery_ids, 0), np.equal(gallery_ids, -1))
+        junk_flag_1 = np.equal(gallery_ids, -1)
         junk_flag_2 = np.logical_and(np.equal(gallery_cam_ids, query_cam_ids[i]),
                                      np.equal(gallery_ids, query_ids[i]))
 
         good_index = index[good_flag]
         junk_index = index[np.logical_or(junk_flag_1, junk_flag_2)]
 
-        if metric == "euclidean":
-            dist = euclidean_distances(gallery_features, [q_feat]).squeeze()
-        else:
-            dist = -np.dot(gallery_features, q_feat)
+        dist = dist_array[i]
+
         sort_index = np.argsort(dist)
 
         ap[i], cmc[i, :] = compute_ap(good_index, junk_index, sort_index)
@@ -99,7 +102,7 @@ def eval_rank_list(rank_list, query_ids, query_cam_ids, gallery_ids, gallery_cam
     for i in tqdm(range(num_query)):
         index = np.arange(num_gallery)
         good_flag = np.logical_and(np.not_equal(gallery_cam_ids, query_cam_ids[i]), np.equal(gallery_ids, query_ids[i]))
-        junk_flag_1 = np.logical_or(np.equal(gallery_ids, 0), np.equal(gallery_ids, -1))
+        junk_flag_1 = np.equal(gallery_ids, -1)
         junk_flag_2 = np.logical_and(np.equal(gallery_cam_ids, query_cam_ids[i]),
                                      np.equal(gallery_ids, query_ids[i]))
 
