@@ -4,7 +4,7 @@
 p_size: 16
 k_size: 8
 
-gpus: [0]
+gpus: [7]
 memonger: false
 # settings for optimizer
 optimizer: sgd
@@ -13,7 +13,7 @@ wd: 0.0005
 lr_step: [80,100]
 
 #settings for data
-dataset: duke
+dataset: msmt
 image_size: [256,128]
 
 random_mirror: true
@@ -22,7 +22,7 @@ random_erase: true
 
 
 #settings for model
-prefix: baseline-gbms0.1-dsup-amsoftmax0.3-relu-crop-140ep
+prefix: baseline-gbms0.1-amsoftmax0.3-relu-crop-140ep
 
 network: resnet_s16
 
@@ -34,7 +34,7 @@ num_epoch: 140
 
 # settings for gcn
 use_gbms: true
-deep_sup: true
+deep_sup: false
 temperature: 0.1
 
 

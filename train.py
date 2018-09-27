@@ -168,7 +168,7 @@ if __name__ == '__main__':
     if use_softmax:
         acc = CustomAccuracy(batch_size=batch_size, output_names=["softmax_output"], label_names=["softmax_label"],
                              name="acc")
-        ce_loss = CustomCrossEntropy(batch_size=batch_size, output_names=["softmax_output"],
+        ce_loss = CustomCrossEntropy(batch_size=batch_size, output_names=["am_softmax_output"],
                                      label_names=["softmax_label"], name="ce")
         metric_list.extend([acc, ce_loss])
 
