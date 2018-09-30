@@ -27,10 +27,22 @@ class Compose:
         return img
 
 
+class ToTensor:
+    def __call__(self, pic):
+        """
+        Args:
+            pic (PIL Image or numpy.ndarray): Image to be converted to tensor.
+
+        Returns:
+            Tensor: Converted image.
+        """
+        return np.array(pic, np.float32).transpose([2, 0, 1]) / 255
+
+
 class Normalize:
     def __init__(self, mean=(0, 0, 0), std=(1, 1, 1)):
-        self.mean = np.array(mean).reshape([1, 1, 3])
-        self.std = np.array(std).reshape([1, 1, 3])
+        self.mean = np.array(mean).reshape([3, 1, 1])
+        self.std = np.array(std).reshape([3, 1, 1])
 
     def __call__(self, img):
         return (img - self.mean) / self.std
@@ -45,11 +57,6 @@ class RandomHorizontalFlip:
             img = cv2.flip(img, flipCode=1)
 
         return img
-
-
-class ToTensor:
-    def __call__(self, img):
-        return img / 255
 
 
 class RandomVerticalFlip:
@@ -75,7 +82,7 @@ class RandomErase:
          mean: Erasing value.
     """
 
-    def __init__(self, probability=0.5, sl=0.02, sh=0.4, r1=0.3, mean=(127.0, 127.0, 127.0)):
+    def __init__(self, mean, probability=0.5, sl=0.02, sh=0.4, r1=0.3):
         self.probability = probability
         self.sl = sl
         self.sh = sh

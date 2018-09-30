@@ -5,15 +5,17 @@ import logging
 import yaml
 import importlib
 
+import mxnet.contrib.onnx as onnx
 from pprint import pprint
 
 from utils.sub_module import *
 from utils.misc import DotDict
 from utils.misc import clean_immediate_checkpoints
 from utils.misc import CustomAccuracy, CustomCrossEntropy
-from utils.iterators import get_train_iterator
+from utils.iterators import get_train_iterator, get_train_iterator_v1
 from utils.memonger import search_plan
-from utils.lr_scheduler import WarmupMultiFactorScheduler
+from utils.lr_scheduler import WarmupMultiFactorScheduler, WarmupMultiFactorScheduler_v1
+from utils.optimizer import CustomSGD
 
 
 def build_network(symbol, num_id, p_size, **kwargs):
@@ -89,10 +91,6 @@ if __name__ == '__main__':
     data_dir = args.data_dir
     p_size = args.p_size
     k_size = args.k_size
-    lr_step = args.lr_step
-    optmizer = args.optimizer
-    lr = args.lr
-    wd = args.wd
     num_epoch = args.num_epoch
     image_size = args.image_size
     prefix = args.prefix
@@ -104,7 +102,6 @@ if __name__ == '__main__':
     use_triplet = args.use_triplet
     triplet_margin = args.triplet_margin
     deep_sup = args.deep_sup
-    begin_epoch = args.begin_epoch
     norm_scale = args.norm_scale
     temperature = args.temperature
     softmax_margin = args.softmax_margin
@@ -115,44 +112,44 @@ if __name__ == '__main__':
     logging.basicConfig(format="%(asctime)s %(message)s",
                         filename='log/%s/%s.log' % (selected_dataset, os.path.basename(prefix)), filemode='a')
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     logging.info(args)
     stream_handler = logging.StreamHandler()
-    stream_handler.setLevel(logging.DEBUG)
+    stream_handler.setLevel(logging.INFO)
     logger.addHandler(stream_handler)
-
-    _, arg_params, aux_params = mx.model.load_checkpoint('%s' % model_load_prefix, model_load_epoch)
 
     devices = [mx.gpu(i) for i in gpus]
 
-    train = get_train_iterator(root=data_dir,
-                               p_size=p_size,
-                               k_size=k_size,
-                               image_size=image_size,
-                               random_erase=args.random_erase,
-                               random_mirror=args.random_mirror,
-                               random_crop=args.random_crop,
-                               num_worker=8,
-                               seed=random_seed)
+    train = get_train_iterator_v1(root=data_dir,
+                                  p_size=p_size,
+                                  k_size=k_size,
+                                  image_size=image_size,
+                                  random_erase=args.random_erase,
+                                  random_mirror=args.random_mirror,
+                                  random_crop=args.random_crop,
+                                  num_worker=8,
+                                  seed=random_seed)
 
-    assert train.num_id == num_id
+    # lr_scheduler = WarmupMultiFactorScheduler(step=[s * train.size for s in args.lr_step], factor=0.1, warmup=True,
+    #                                           warmup_lr=args.lr / 100, warmup_step=train.size * 20, mode="gradual")
 
-    lr_scheduler = WarmupMultiFactorScheduler(step=[s * train.size for s in lr_step], factor=0.1, warmup=True,
-                                              warmup_lr=lr / 100, warmup_step=train.size * 20, mode="gradual")
-    # lr_scheduler = ExponentialScheduler(base_lr=lr, exp=0.001, start_step=150 * train.size, end_step=300 * train.size)
+    lr_scheduler = WarmupMultiFactorScheduler_v1(steps=args.lr_step, factor=0.1, warmup=True,
+                                                 iters_per_epoch=train.size, warmup_begin_lr=args.lr / 100,
+                                                 warmup_epoch=20, mode="gradual")
 
     init = mx.initializer.MSRAPrelu(factor_type='out', slope=0.0)
 
-    optimizer_params = {"learning_rate": lr,
-                        "wd": wd,
-                        "lr_scheduler": lr_scheduler,
-                        "rescale_grad": 1.0 / batch_size,
-                        "begin_num_update": begin_epoch * train.size}
+    optimizer = mx.optimizer.SGD(learning_rate=args.lr,
+                                 wd=args.wd,
+                                 momentum=0.9,
+                                 rescale_grad=1.0 / batch_size,
+                                 lr_scheduler=lr_scheduler,
+                                 begin_num_update=args.begin_epoch * train.size)
 
-    if optmizer in ["sgd", "nag"]:
-        optimizer_params["momentum"] = 0.9
+    # _, arg_params, aux_params = mx.model.load_checkpoint('%s' % model_load_prefix, model_load_epoch)
+    # symbol = importlib.import_module('symbols.symbol_' + network).get_symbol()
 
-    symbol = importlib.import_module('symbols.symbol_' + network).get_symbol()
+    symbol, arg_params, aux_params = onnx.import_model("pretrain_models/resnetv1_50.onnx")
 
     net = build_network(symbol=symbol, num_id=num_id, batch_size=batch_size, p_size=p_size,
                         softmax_margin=softmax_margin, norm_scale=norm_scale, deep_sup=deep_sup,
@@ -192,11 +189,10 @@ if __name__ == '__main__':
               aux_params=aux_params,
               allow_missing=True,
               initializer=init,
-              optimizer=optmizer,
-              optimizer_params=optimizer_params,
+              optimizer=optimizer,
               num_epoch=num_epoch,
-              begin_epoch=begin_epoch,
-              batch_end_callback=mx.callback.Speedometer(batch_size=batch_size, frequent=5),
+              begin_epoch=args.begin_epoch,
+              batch_end_callback=mx.callback.Speedometer(batch_size=batch_size, frequent=10),
               epoch_end_callback=mx.callback.do_checkpoint("models/" + prefix, period=10),
               kvstore='device')
 

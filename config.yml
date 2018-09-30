@@ -4,25 +4,24 @@
 p_size: 16
 k_size: 8
 
-gpus: [7]
+gpus: [6]
 memonger: false
 # settings for optimizer
-optimizer: sgd
 lr: 0.1
 wd: 0.0005
 lr_step: [80,100]
 
 #settings for data
-dataset: msmt
+dataset: cuhk
 image_size: [256,128]
 
 random_mirror: true
-random_crop: true
+random_crop: false
 random_erase: true
 
 
 #settings for model
-prefix: baseline-gbms0.1-amsoftmax0.3-relu-crop-140ep
+prefix: baseline-gbms0.1-dsup-amsoftmax0.3-relu-140ep-scheduler
 
 network: resnet_s16
 
@@ -34,7 +33,7 @@ num_epoch: 140
 
 # settings for gcn
 use_gbms: true
-deep_sup: false
+deep_sup: true
 temperature: 0.1
 
 
