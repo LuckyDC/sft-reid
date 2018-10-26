@@ -5,21 +5,17 @@ import logging
 import yaml
 import importlib
 
-import mxnet.contrib.onnx as onnx
 from pprint import pprint
 
 from utils.sub_module import *
 from utils.misc import DotDict
 from utils.misc import clean_immediate_checkpoints
 from utils.misc import CustomAccuracy, CustomCrossEntropy
-from utils.iterators import get_train_iterator, get_train_iterator_v1
+from utils.iterators import get_train_iterator
 from utils.memonger import search_plan
-from utils.lr_scheduler import WarmupMultiFactorScheduler, WarmupMultiFactorScheduler_v1
-from utils.optimizer import CustomSGD
 
 
-def build_network(symbol, num_id, p_size, **kwargs):
-    triplet_normalization = kwargs.get("triplet_normalization", False)
+def build_network(symbol, num_id, **kwargs):
     use_triplet = kwargs.get("use_triplet", False)
     use_softmax = kwargs.get("use_softmax", False)
     triplet_margin = kwargs.get("triplet_margin", 0.5)
@@ -32,16 +28,13 @@ def build_network(symbol, num_id, p_size, **kwargs):
 
     pooling = mx.symbol.Pooling(data=symbol, kernel=(1, 1), global_pool=True, pool_type='avg', name='global_pool')
     flatten = mx.symbol.Flatten(data=pooling, name='flatten')
-    # flatten = mx.sym.BatchNorm(data=flatten, fix_gamma=False, eps=2e-5, momentum=0.9, name='flatten')
 
-    flatten_rw, sim, aff = rw_module(flatten, sim_normalize=True, **kwargs)
+    flatten_rw = rw_module(flatten, sim_normalize=True, **kwargs)
 
     # triplet loss
     if use_triplet:
-        data_triplet = mx.sym.L2Normalization(flatten, name="triplet_l2") if triplet_normalization else flatten
-        triplet = triplet_hard_loss(data_triplet, label, margin=triplet_margin, batch_size=batch_size)
-        # triplet = mx.symbol.Custom(data_triplet, p_size=p_size, margin=0.3, grad_scale=1.0, op_type="TripletLoss",
-        #                            name="triplet")
+        triplet = triplet_hard_loss(flatten, label, margin=triplet_margin, batch_size=batch_size)
+
         group.append(triplet)
 
     # softmax cross entropy loss
@@ -49,13 +42,6 @@ def build_network(symbol, num_id, p_size, **kwargs):
         softmax = classification_branch(flatten, flatten_rw, label=label, num_id=num_id, margin=softmax_margin,
                                         **kwargs)
         group.extend(softmax)
-
-        # softmax = independent_classification_branch(flatten, label=label, num_id=num_id, margin=softmax_margin,
-        #                                             **kwargs)
-        # softmax_rw = independent_classification_branch(flatten, label=label, num_id=num_id, margin=softmax_margin,
-        #                                                  name="rw", **kwargs)
-        # group.extend(softmax)
-        # group.extend(softmax_rw)
 
     return mx.symbol.Group(group)
 
@@ -122,12 +108,6 @@ if __name__ == '__main__':
                                num_worker=8,
                                seed=random_seed)
 
-    # lr_scheduler = WarmupMultiFactorScheduler(step=[s * train.size for s in args.lr_step], factor=0.1, warmup=True,
-    #                                           warmup_lr=args.lr / 100, warmup_step=train.size * 20, mode="gradual")
-    # lr_scheduler = WarmupMultiFactorScheduler_v1(steps=args.lr_step, factor=0.1, warmup=True,
-    #                                              iters_per_epoch=train.size, warmup_begin_lr=args.lr / 100,
-    #                                              warmup_epoch=20, mode="gradual")
-
     lr_scheduler = mx.lr_scheduler.MultiFactorScheduler(factor=0.1,
                                                         base_lr=args.lr,
                                                         step=[s * train.size for s in args.lr_step],
@@ -154,9 +134,7 @@ if __name__ == '__main__':
     _, arg_params, aux_params = mx.model.load_checkpoint('%s' % model_load_prefix, model_load_epoch)
     symbol = importlib.import_module('symbols.symbol_' + network).get_symbol()
 
-    # symbol, arg_params, aux_params = onnx.import_model("pretrain_models/resnetv1_50.onnx")
-
-    net = build_network(symbol=symbol, num_id=num_id, batch_size=batch_size, p_size=p_size,
+    net = build_network(symbol=symbol, num_id=num_id, batch_size=batch_size,
                         softmax_margin=softmax_margin, norm_scale=norm_scale, deep_sup=deep_sup,
                         use_rw=use_rw, bottleneck_dims=bottleneck_dims, use_softmax=use_softmax,
                         use_triplet=use_triplet, temperature=temperature, triplet_margin=triplet_margin)
@@ -197,8 +175,3 @@ if __name__ == '__main__':
               kvstore='device')
 
     clean_immediate_checkpoints("models", prefix, num_epoch)
-
-    # del model
-    #
-    # cmd = "python{} eval.py {} {}".format(sys.version[0], gpus[0], "models/" + prefix + "-%04d.params" % num_epoch)
-    # subprocess.check_call(cmd.split(" "))

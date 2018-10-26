@@ -44,7 +44,6 @@ bottleneck_dims: 512
 #settings for loss function
 use_triplet: false
 triplet_margin: 1.0
-triplet_normalization: false
 
 use_softmax: true
 softmax_margin: 0.3

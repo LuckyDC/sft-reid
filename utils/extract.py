@@ -7,11 +7,8 @@ import numpy as np
 import mxnet as mx
 import scipy.io as sio
 
-import mxnet.contrib.onnx as onnx
-from utils.iterators import get_test_iterator, get_test_iterator_v1
+from utils.iterators import get_test_iterator
 from collections import namedtuple
-
-import operators.triplet_loss
 
 Batch = namedtuple('Batch', ['data'])
 
@@ -63,11 +60,6 @@ if __name__ == '__main__':
     load_model_prefix = "models/%s/%s" % (args.dataset, args.prefix)
 
     symbol, arg_params, aux_params = mx.model.load_checkpoint(load_model_prefix, args.epoch_idx)
-
-    # flatten = []
-    # for i in range(6):
-    #     flatten.append(symbol.get_internals()["flatten%d_output" % i])
-    # flatten = mx.symbol.Concat(*flatten, dim=1)
 
     flatten = symbol.get_internals()["flatten_output"]
     model = mx.mod.Module(symbol=flatten, data_names=["data"], label_names=None, context=context)

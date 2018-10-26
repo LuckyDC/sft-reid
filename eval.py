@@ -97,7 +97,7 @@ if __name__ == '__main__':
             gallery_cam_ids = np.concatenate([gallery_cam_ids, distractor_cam_ids], axis=0)
 
             eval_feature(query_features, gallery_features, query_ids, query_cam_ids, gallery_ids, gallery_cam_ids,
-                         ctx=mx.gpu(i) if i<2 else mx.cpu(), metric="cosine")
+                         ctx=mx.gpu(i) if i < 2 else mx.cpu(), metric="cosine")
 
             del distractor_features
             del distractor_cam_ids

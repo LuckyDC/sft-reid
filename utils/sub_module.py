@@ -2,7 +2,6 @@ from __future__ import print_function, division
 
 import numpy as np
 import mxnet as mx
-from utils.debug import forward_debug, backward_debug
 
 
 def euclidean_distances(X, batch_size, squared=False):
@@ -25,7 +24,7 @@ def label_to_square(label, batch_size):
     return mx.symbol.stop_gradient(aff_label)
 
 
-def rw_module(data, sim_normalize=True, **kwargs):
+def rw_module(data, **kwargs):
     temperature = kwargs.get("temperature", 1.0)
     batch_size = kwargs.get("batch_size", -1)
     metric = kwargs.get("metric", "cosine")
@@ -33,7 +32,7 @@ def rw_module(data, sim_normalize=True, **kwargs):
     if metric not in ["cosine", "euclidean"]:
         raise ValueError("Parameter of metric must be 'cosine' or 'euclidean'.")
 
-    in_sim = mx.symbol.L2Normalization(data=data, name='l2_norm') if sim_normalize else data
+    in_sim = mx.symbol.L2Normalization(data=data)
 
     if metric == "cosine":
         sim = mx.symbol.dot(in_sim, in_sim, transpose_b=True)
@@ -43,7 +42,7 @@ def rw_module(data, sim_normalize=True, **kwargs):
     aff = mx.symbol.softmax(sim, temperature=temperature, axis=1)
     feat = mx.symbol.dot(aff, data)
 
-    return feat, sim, aff
+    return feat
 
 
 def classification_branch(data, trans_data, label, num_id, margin=0.5, **kwargs):
@@ -103,25 +102,6 @@ def amsoftmax(data, label, num_dims, num_id, margin, scale, grad_scale=1.0, post
     return am_softmax_loss, plain_softmax_loss
 
 
-def verification_branch(data, label, p_size, k_size, grad_scale=1.0, name="veri"):
-    batch_size = p_size * k_size
-    label = label_to_square(label, batch_size=batch_size)
-    ratio = label / k_size + (1 - label) / (k_size * (p_size - 1))
-
-    # scale = mx.symbol.Variable("scale", shape=(1,), init=mx.init.Constant(1.0))
-    # bias = mx.symbol.Variable("bias", shape=(1,), init=mx.init.Constant(0.0))
-
-    # data = mx.symbol.broadcast_mul(data, scale)
-    # data = mx.symbol.broadcast_add(data, bias)
-
-    loss = mx.symbol.sum(mx.symbol.square(label - data) * ratio, axis=1)
-
-    # ce = label * mx.symbol.log(data) + (1 - label) * mx.symbol.log(1 - data + mx.symbol.eye(batch_size))
-    # loss = mx.symbol.sum(-ce * ratio, axis=1)
-
-    return mx.symbol.MakeLoss(loss, grad_scale=grad_scale, name=name)
-
-
 def triplet_hard_loss(data, label, margin, batch_size, grad_scale=1.0, name="triplet"):
     label = label_to_square(label, batch_size)
 
@@ -133,27 +113,3 @@ def triplet_hard_loss(data, label, margin, batch_size, grad_scale=1.0, name="tri
     loss = mx.symbol.relu(pos - neg + margin)
 
     return mx.symbol.MakeLoss(loss, grad_scale=grad_scale, name=name)
-
-
-def pcb_branch(data, label, num_part, num_hidden, num_id):
-    pool = mx.symbol.contrib.AdaptiveAvgPooling2D(data, output_size=(num_part, 1))
-    splits = mx.symbol.split(pool, num_outputs=num_part, axis=2)
-
-    cls_softmax = []
-    for i, split in enumerate(splits):
-        pool_red = mx.symbol.FullyConnected(split, num_hidden=num_hidden)
-        pool_bn = mx.sym.BatchNorm(data=pool_red, fix_gamma=False, momentum=0.9, eps=2e-5)
-        pool_relu = mx.symbol.LeakyReLU(data=pool_bn, act_type="prelu")
-
-        fc = mx.symbol.FullyConnected(pool_relu, num_hidden=num_id)
-        softmax = mx.symbol.SoftmaxOutput(fc, label, name="cls_softmax_%d" % i)
-        cls_softmax.append(softmax)
-
-    return cls_softmax
-
-
-def nuclear_regularizer(data, grad_scale=1.0, name="nuclear_reg"):
-    loss = mx.symbol.MakeLoss(mx.symbol.diag(data), grad_scale=grad_scale, name=name)
-    return loss
-
-
