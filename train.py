@@ -24,7 +24,6 @@ def build_network(symbol, num_id, p_size, **kwargs):
     use_softmax = kwargs.get("use_softmax", False)
     triplet_margin = kwargs.get("triplet_margin", 0.5)
     softmax_margin = kwargs.get("softmax_margin", 0.5)
-    use_verification = kwargs.get("use_verification", False)
     batch_size = kwargs.get("batch_size", 0)
 
     label = mx.symbol.Variable(name="softmax_label")
@@ -35,34 +34,28 @@ def build_network(symbol, num_id, p_size, **kwargs):
     flatten = mx.symbol.Flatten(data=pooling, name='flatten')
     # flatten = mx.sym.BatchNorm(data=flatten, fix_gamma=False, eps=2e-5, momentum=0.9, name='flatten')
 
-    flatten_gbms, sim, aff = gbms_block(flatten, sim_normalize=True, **kwargs)
+    flatten_rw, sim, aff = rw_module(flatten, sim_normalize=True, **kwargs)
 
     # triplet loss
     if use_triplet:
         data_triplet = mx.sym.L2Normalization(flatten, name="triplet_l2") if triplet_normalization else flatten
         triplet = triplet_hard_loss(data_triplet, label, margin=triplet_margin, batch_size=batch_size)
+        # triplet = mx.symbol.Custom(data_triplet, p_size=p_size, margin=0.3, grad_scale=1.0, op_type="TripletLoss",
+        #                            name="triplet")
         group.append(triplet)
 
     # softmax cross entropy loss
     if use_softmax:
-        softmax = classification_branch(flatten, flatten_gbms, label=label, num_id=num_id, margin=softmax_margin,
+        softmax = classification_branch(flatten, flatten_rw, label=label, num_id=num_id, margin=softmax_margin,
                                         **kwargs)
         group.extend(softmax)
 
         # softmax = independent_classification_branch(flatten, label=label, num_id=num_id, margin=softmax_margin,
         #                                             **kwargs)
-        # softmax_gbms = independent_classification_branch(flatten, label=label, num_id=num_id, margin=softmax_margin,
-        #                                                  name="gbms", **kwargs)
+        # softmax_rw = independent_classification_branch(flatten, label=label, num_id=num_id, margin=softmax_margin,
+        #                                                  name="rw", **kwargs)
         # group.extend(softmax)
-        # group.extend(softmax_gbms)
-
-    if use_verification:
-        veri = verification_branch(sim, label, p_size, k_size, name="veri")
-        group.append(veri)
-
-    # if use_pcb:
-    #     cls_softmax = pcb_branch(symbol,label,num_part=3,num_hidden=512,num_id=num_id)
-    #     group.extend(cls_softmax)
+        # group.extend(softmax_rw)
 
     return mx.symbol.Group(group)
 
@@ -96,7 +89,7 @@ if __name__ == '__main__':
     prefix = args.prefix
     batch_size = p_size * k_size
     use_softmax = args.use_softmax
-    use_gbms = args.use_gbms
+    use_rw = args.use_rw
     bottleneck_dims = args.bottleneck_dims
     num_id = args.num_id
     use_triplet = args.use_triplet
@@ -105,7 +98,6 @@ if __name__ == '__main__':
     norm_scale = args.norm_scale
     temperature = args.temperature
     softmax_margin = args.softmax_margin
-    use_verification = args.use_verification
     memonger = args.memonger
 
     # config logger
@@ -120,42 +112,54 @@ if __name__ == '__main__':
 
     devices = [mx.gpu(i) for i in gpus]
 
-    train = get_train_iterator_v1(root=data_dir,
-                                  p_size=p_size,
-                                  k_size=k_size,
-                                  image_size=image_size,
-                                  random_erase=args.random_erase,
-                                  random_mirror=args.random_mirror,
-                                  random_crop=args.random_crop,
-                                  num_worker=8,
-                                  seed=random_seed)
+    train = get_train_iterator(root=data_dir,
+                               p_size=p_size,
+                               k_size=k_size,
+                               image_size=image_size,
+                               random_erase=args.random_erase,
+                               random_mirror=args.random_mirror,
+                               random_crop=args.random_crop,
+                               num_worker=8,
+                               seed=random_seed)
 
     # lr_scheduler = WarmupMultiFactorScheduler(step=[s * train.size for s in args.lr_step], factor=0.1, warmup=True,
     #                                           warmup_lr=args.lr / 100, warmup_step=train.size * 20, mode="gradual")
+    # lr_scheduler = WarmupMultiFactorScheduler_v1(steps=args.lr_step, factor=0.1, warmup=True,
+    #                                              iters_per_epoch=train.size, warmup_begin_lr=args.lr / 100,
+    #                                              warmup_epoch=20, mode="gradual")
 
-    lr_scheduler = WarmupMultiFactorScheduler_v1(steps=args.lr_step, factor=0.1, warmup=True,
-                                                 iters_per_epoch=train.size, warmup_begin_lr=args.lr / 100,
-                                                 warmup_epoch=20, mode="gradual")
+    lr_scheduler = mx.lr_scheduler.MultiFactorScheduler(factor=0.1,
+                                                        base_lr=args.lr,
+                                                        step=[s * train.size for s in args.lr_step],
+                                                        warmup_steps=train.size * 20,
+                                                        warmup_begin_lr=args.lr / 100,
+                                                        warmup_mode='linear')
 
     init = mx.initializer.MSRAPrelu(factor_type='out', slope=0.0)
 
-    optimizer = mx.optimizer.SGD(learning_rate=args.lr,
-                                 wd=args.wd,
-                                 momentum=0.9,
-                                 rescale_grad=1.0 / batch_size,
-                                 lr_scheduler=lr_scheduler,
-                                 begin_num_update=args.begin_epoch * train.size)
+    if args.optimizer == "sgd":
+        optimizer = mx.optimizer.SGD(learning_rate=args.lr,
+                                     wd=args.wd,
+                                     momentum=0.9,
+                                     lr_scheduler=lr_scheduler,
+                                     rescale_grad=1 / batch_size,
+                                     begin_num_update=args.begin_epoch * train.size)
+    else:
+        optimizer = mx.optimizer.Adam(learning_rate=args.lr,
+                                      wd=args.wd,
+                                      lr_scheduler=lr_scheduler,
+                                      rescale_grad=1 / batch_size,
+                                      begin_num_update=args.begin_epoch * train.size)
 
-    # _, arg_params, aux_params = mx.model.load_checkpoint('%s' % model_load_prefix, model_load_epoch)
-    # symbol = importlib.import_module('symbols.symbol_' + network).get_symbol()
+    _, arg_params, aux_params = mx.model.load_checkpoint('%s' % model_load_prefix, model_load_epoch)
+    symbol = importlib.import_module('symbols.symbol_' + network).get_symbol()
 
-    symbol, arg_params, aux_params = onnx.import_model("pretrain_models/resnetv1_50.onnx")
+    # symbol, arg_params, aux_params = onnx.import_model("pretrain_models/resnetv1_50.onnx")
 
     net = build_network(symbol=symbol, num_id=num_id, batch_size=batch_size, p_size=p_size,
                         softmax_margin=softmax_margin, norm_scale=norm_scale, deep_sup=deep_sup,
-                        use_gbms=use_gbms, bottleneck_dims=bottleneck_dims, use_softmax=use_softmax,
-                        use_triplet=use_triplet, temperature=temperature, triplet_margin=triplet_margin,
-                        use_verification=use_verification)
+                        use_rw=use_rw, bottleneck_dims=bottleneck_dims, use_softmax=use_softmax,
+                        use_triplet=use_triplet, temperature=temperature, triplet_margin=triplet_margin)
 
     if memonger:
         net = search_plan(net, data=(batch_size, 3) + tuple(image_size), softmax_label=(batch_size,))
@@ -172,10 +176,6 @@ if __name__ == '__main__':
     if use_triplet:
         triplet_loss = mx.metric.Loss(output_names=["triplet_output"], name="triplet")
         metric_list.append(triplet_loss)
-
-    if use_verification:
-        veri_loss = mx.metric.Loss(output_names=["veri_output"], name="veri")
-        metric_list.append(veri_loss)
 
     metric = mx.metric.CompositeEvalMetric(metrics=metric_list)
 

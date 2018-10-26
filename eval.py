@@ -105,5 +105,5 @@ if __name__ == '__main__':
 
     print("\n")
 
-    cmd = "python%c -m post_processing.random_walk_feat %s %s" % (sys.version[0], dataset, prefix)
+    cmd = "python%c -m post_processing.post_clustering %s %s" % (sys.version[0], dataset, prefix)
     subprocess.check_call(cmd.split(" "))

@@ -322,7 +322,7 @@ class EvalIterator(DataIter):
 
     @property
     def provide_label(self):
-        return [("id", (self.batch_size,)), ("cam_id", (self.batch_size,))]
+        return [("id", (self.batch_size,)), ("cam_id", (self.batch_size,)), ("imgs", (self.batch_size,))]
 
     @property
     def data_names(self):
@@ -380,22 +380,23 @@ class EvalIterator(DataIter):
         data = mx.nd.array(data)
         ids = mx.nd.array(indices[1])
         cam_ids = mx.nd.array(indices[2])
+        imgs = np.array(indices[0])
 
-        return data, ids, cam_ids
+        return data, ids, cam_ids, imgs
 
     def next(self):
         if self.cursor >= self.num_iters:
             raise StopIteration
 
         self.cursor += 1
-        data, ids, cam_ids = self.result_queue.get()
+        data, ids, cam_ids, imgs = self.result_queue.get()
 
         if data.shape[0] < self.batch_size:
             pad = self.batch_size - data.shape[0]
         else:
             pad = 0
 
-        return DataBatch(data=[data], label=[ids, cam_ids], pad=pad, provide_data=self.provide_data,
+        return DataBatch(data=[data], label=[ids, cam_ids, imgs], pad=pad, provide_data=self.provide_data,
                          provide_label=self.provide_label)
 
 
@@ -652,7 +653,7 @@ class TrainIterator_v1(DataIter):
         # Loading
         data = []
         for img_path in img_paths:
-            img = Image.open(img_path)
+            img = Image.open(img_path).convert("RGB")
 
             if self.transform is not None:
                 img = self.transform(img)
@@ -761,7 +762,7 @@ class EvalIterator_v1(DataIter):
 
     @property
     def provide_label(self):
-        return [("id", (self.batch_size,)), ("cam_id", (self.batch_size,))]
+        return [("id", (self.batch_size,)), ("cam_id", (self.batch_size,)), ("img_path", (self.batch_size,))]
 
     @property
     def data_names(self):
@@ -806,7 +807,7 @@ class EvalIterator_v1(DataIter):
     def _get_batch(self, indices):
         data = []
         for img_path in indices[0]:
-            img = Image.open(img_path)
+            img = Image.open(img_path).convert("RGB")
 
             img = self.transform(img)
 
@@ -817,20 +818,21 @@ class EvalIterator_v1(DataIter):
         data = mx.nd.array(data, dtype=np.float32)
         ids = mx.nd.array(indices[1])
         cam_ids = mx.nd.array(indices[2])
+        imgs = np.array(indices[0])
 
-        return data, ids, cam_ids
+        return data, ids, cam_ids, imgs
 
     def next(self):
         if self.cursor >= self.num_iters:
             raise StopIteration
 
         self.cursor += 1
-        data, ids, cam_ids = self.result_queue.get()
+        data, ids, cam_ids, imgs = self.result_queue.get()
 
         if data.shape[0] < self.batch_size:
             pad = self.batch_size - data.shape[0]
         else:
             pad = 0
 
-        return DataBatch(data=[data], label=[ids, cam_ids], pad=pad, provide_data=self.provide_data,
+        return DataBatch(data=[data], label=[ids, cam_ids, imgs], pad=pad, provide_data=self.provide_data,
                          provide_label=self.provide_label)

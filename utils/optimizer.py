@@ -2,7 +2,7 @@ from __future__ import print_function
 from __future__ import division
 
 import mxnet as mx
-from mxnet.optimizer import SGD, clip
+from mxnet.optimizer import SGD
 from mxnet.ndarray import NDArray
 
 import logging
@@ -22,7 +22,7 @@ class CustomSGD(SGD):
 
         grad *= self.rescale_grad
         if self.clip_gradient is not None:
-            grad = clip(grad, -self.clip_gradient, self.clip_gradient)
+            grad = mx.nd.clip(grad, -self.clip_gradient, self.clip_gradient)
 
         grad += wd * weight
 

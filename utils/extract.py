@@ -20,6 +20,7 @@ def extract_feature(model, iterator):
     feature = []
     ids = []
     cam_ids = []
+    imgs = []
 
     for batch in iterator:
         model.forward(Batch(data=batch.data))
@@ -29,17 +30,17 @@ def extract_feature(model, iterator):
         feature.append(output)
         ids.append(batch.label[0].asnumpy())
         cam_ids.append(batch.label[1].asnumpy())
+        imgs.append(batch.label[2])
 
     feature = np.concatenate(feature, axis=0)
     ids = np.concatenate(ids, axis=0)
     cam_ids = np.concatenate(cam_ids, axis=0)
+    imgs = np.concatenate(imgs, axis=0)
 
     assert feature.shape[0] == ids.shape[0] == cam_ids.shape[0]
 
-    return feature, ids, cam_ids
+    return feature, ids, cam_ids, imgs
 
-
-get_test_iterator = get_test_iterator_v1
 
 if __name__ == '__main__':
     os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
@@ -63,6 +64,11 @@ if __name__ == '__main__':
 
     symbol, arg_params, aux_params = mx.model.load_checkpoint(load_model_prefix, args.epoch_idx)
 
+    # flatten = []
+    # for i in range(6):
+    #     flatten.append(symbol.get_internals()["flatten%d_output" % i])
+    # flatten = mx.symbol.Concat(*flatten, dim=1)
+
     flatten = symbol.get_internals()["flatten_output"]
     model = mx.mod.Module(symbol=flatten, data_names=["data"], label_names=None, context=context)
     model.bind(data_shapes=[('data', (args.batch_size, 3) + image_size)], for_training=False, force_rebind=True)
@@ -78,11 +84,11 @@ if __name__ == '__main__':
                                    image_size=image_size,
                                    num_worker=8)
 
-    q_feat, q_ids, q_cam_ids = extract_feature(model, q_iterator)
+    q_feat, q_ids, q_cam_ids, q_imgs = extract_feature(model, q_iterator)
     print(q_feat.shape)
 
     save_name = "{}/query-{}".format(feat_root, args.prefix)
-    sio.savemat(save_name, {"feat": q_feat, "ids": q_ids, "cam_ids": q_cam_ids})
+    sio.savemat(save_name, {"feat": q_feat, "ids": q_ids, "cam_ids": q_cam_ids, "imgs": q_imgs})
 
     # extract gallery feature
     g_iterator = get_test_iterator(root=args.gallery,
@@ -91,11 +97,11 @@ if __name__ == '__main__':
                                    image_size=image_size,
                                    num_worker=8)
 
-    g_feat, g_ids, g_cam_ids = extract_feature(model, g_iterator)
+    g_feat, g_ids, g_cam_ids, g_imgs = extract_feature(model, g_iterator)
     print(g_feat.shape)
 
     save_name = "{}/gallery-{}".format(feat_root, args.prefix)
-    sio.savemat(save_name, {"feat": g_feat, "ids": g_ids, "cam_ids": g_cam_ids})
+    sio.savemat(save_name, {"feat": g_feat, "ids": g_ids, "cam_ids": g_cam_ids, "imgs": g_imgs})
 
     # extract distractor feature
     if args.distractor is not None:
@@ -106,8 +112,8 @@ if __name__ == '__main__':
                                            image_size=image_size,
                                            num_worker=8)
 
-            d_feat, d_ids, d_cam_ids = extract_feature(model, d_iterator)
+            d_feat, d_ids, d_cam_ids, d_imgs = extract_feature(model, d_iterator)
             print(d_feat.shape)
 
             save_name = "{}/distractor{}-{}".format(feat_root, i + 1, args.prefix)
-            sio.savemat(save_name, {"feat": d_feat, "ids": d_ids, "cam_ids": d_cam_ids})
+            sio.savemat(save_name, {"feat": d_feat, "ids": d_ids, "cam_ids": d_cam_ids, "imgs": d_imgs})

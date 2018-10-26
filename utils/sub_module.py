@@ -25,7 +25,7 @@ def label_to_square(label, batch_size):
     return mx.symbol.stop_gradient(aff_label)
 
 
-def gbms_block(data, sim_normalize=True, **kwargs):
+def rw_module(data, sim_normalize=True, **kwargs):
     temperature = kwargs.get("temperature", 1.0)
     batch_size = kwargs.get("batch_size", -1)
     metric = kwargs.get("metric", "cosine")
@@ -48,11 +48,11 @@ def gbms_block(data, sim_normalize=True, **kwargs):
 
 def classification_branch(data, trans_data, label, num_id, margin=0.5, **kwargs):
     bottleneck_dims = kwargs.get("bottleneck_dims", 512)
-    use_gbms = kwargs.get("use_gbms", False)
+    use_rw = kwargs.get("use_rw", False)
     deep_sup = kwargs.get("deep_sup", False)
     norm_scale = kwargs.get("norm_scale", 1.0)
 
-    if use_gbms:
+    if use_rw:
         if deep_sup:
             data = mx.symbol.Concat(data, trans_data, dim=0)
             label = mx.symbol.tile(label, reps=2)

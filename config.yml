@@ -10,9 +10,10 @@ memonger: false
 lr: 0.1
 wd: 0.0005
 lr_step: [80,100]
+optimizer: sgd
 
 #settings for data
-dataset: cuhk
+dataset: market
 image_size: [256,128]
 
 random_mirror: true
@@ -21,7 +22,7 @@ random_erase: true
 
 
 #settings for model
-prefix: baseline-gbms0.1-dsup-amsoftmax0.3-relu-140ep-scheduler
+prefix: baseline
 
 network: resnet_s16
 
@@ -31,9 +32,9 @@ model_load_epoch: 0
 begin_epoch: 0
 num_epoch: 140
 
-# settings for gcn
-use_gbms: true
-deep_sup: true
+# settings for random walk
+use_rw: false
+deep_sup: false
 temperature: 0.1
 
 
@@ -48,8 +49,6 @@ triplet_normalization: false
 use_softmax: true
 softmax_margin: 0.3
 norm_scale: 15
-
-use_verification: false
 
 # specific settings for training data set
 
