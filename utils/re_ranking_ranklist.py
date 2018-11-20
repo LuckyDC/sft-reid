@@ -3,6 +3,8 @@
 from __future__ import division
 import numpy as np
 
+from tqdm import tqdm
+
 """
 Created on Mon Jun 26 14:46:56 2017
 @author: luohao
@@ -46,7 +48,9 @@ def re_ranking(q_g_dist, q_q_dist, g_g_dist, k1=20, k2=6, lambda_value=0.3, hop2
     gallery_num = q_g_dist.shape[0] + q_g_dist.shape[1]
     all_num = gallery_num
 
-    for i in range(all_num):
+    del q_g_dist, q_q_dist, g_g_dist
+
+    for i in tqdm(range(all_num)):
         # k-reciprocal neighbors
         forward_k_neigh_index = initial_rank[i, :k1 + 1]
         backward_k_neigh_index = initial_rank[forward_k_neigh_index, :k1 + 1]
@@ -56,8 +60,7 @@ def re_ranking(q_g_dist, q_q_dist, g_g_dist, k1=20, k2=6, lambda_value=0.3, hop2
         for j in range(len(k_reciprocal_index)):
             candidate = k_reciprocal_index[j]
             candidate_forward_k_neigh_index = initial_rank[candidate, :int(np.around(k1 / 2.)) + 1]
-            candidate_backward_k_neigh_index = initial_rank[candidate_forward_k_neigh_index,
-                                               :int(np.around(k1 / 2.)) + 1]
+            candidate_backward_k_neigh_index = initial_rank[candidate_forward_k_neigh_index,:int(np.around(k1 / 2.)) + 1]
             fi_candidate = np.where(candidate_backward_k_neigh_index == candidate)[0]
             candidate_k_reciprocal_index = candidate_forward_k_neigh_index[fi_candidate]
 

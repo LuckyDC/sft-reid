@@ -89,14 +89,14 @@ def my_classifier(data, num_id, bottleneck_dims):
         The result symbol.
     '''
     fc = mx.symbol.FullyConnected(data, num_hidden=bottleneck_dims, no_bias=True)
-    bn = mx.sym.BatchNorm(data=fc, fix_gamma=False, eps=1e-5)
+    bn = mx.sym.BatchNorm(data=fc, fix_gamma=False, eps=2e-5, momentum=0.9)
     act = mx.symbol.LeakyReLU(bn, act_type="prelu")
 
     l2 = mx.symbol.L2Normalization(act)
 
     cls_weight = mx.symbol.Variable("cls_weight", shape=(num_id, bottleneck_dims))
     cls_weight = mx.symbol.L2Normalization(cls_weight)
-    logits = mx.symbol.FullyConnected(l2, weight=cls_weight, num_hidden=num_id, no_bias=True)
+    logits = mx.symbol.FullyConnected(data=l2, weight=cls_weight, num_hidden=num_id, no_bias=True)
 
     return logits
 
@@ -132,7 +132,7 @@ def AMSoftmaxOutput(data, label, num_id, margin, scale, grad_scale=1.0, name="am
 
     am_softmax = mx.sym.SoftmaxOutput(data=data_margin * scale, label=label, grad_scale=grad_scale, name=name)
 
-    return am_softmax, mx.symbol.stop_gradient(data, name="logits")
+    return am_softmax, mx.symbol.stop_gradient(mx.symbol.softmax(data), name="logits")
 
 
 def triplet_hard_loss(data, label, margin, batch_size, grad_scale=1.0, name="triplet"):

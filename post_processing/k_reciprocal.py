@@ -5,12 +5,14 @@ import scipy.io as sio
 from sklearn.preprocessing import normalize
 from sklearn.metrics import euclidean_distances
 
+from utils.misc import euclidean_dist
+
 from utils.re_ranking_ranklist import re_ranking
 from utils.evaluation import eval_rank_list
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("dataset", type=str, choices=["duke", "cuhk", "market"])
+    parser.add_argument("dataset", type=str, choices=["duke", "cuhk", "market", "msmt"])
     parser.add_argument("prefix", type=str)
     args = parser.parse_args()
 
@@ -33,6 +35,10 @@ if __name__ == '__main__':
         k1 = 20
         k2 = 6
         lambda_value = 0.3
+    elif dataset == "msmt":
+        k1 = 20
+        k2 = 6
+        lambda_value = 0.3
     else:
         raise ValueError("Invalid Dataset!")
 
@@ -51,19 +57,30 @@ if __name__ == '__main__':
     gallery_cam_ids = gallery_mat["cam_ids"].squeeze()
 
     if metric == "euclidean":
-        q_g_dist = euclidean_distances(query_features, gallery_features)
-        q_q_dist = euclidean_distances(query_features)
+        print("calculating G2G dists...")
         g_g_dist = euclidean_distances(gallery_features)
+        print("calculating P2G dists...")
+        q_g_dist = euclidean_distances(query_features, gallery_features)
+        print("calculating P2P dists...")
+        q_q_dist = euclidean_distances(query_features)
+
     elif metric == "cosine":
         query_features = normalize(query_features)
         gallery_features = normalize(gallery_features)
 
+        print("calculating P2G dists...")
         q_g_dist = 1 - np.dot(query_features, gallery_features.T)
+        print("calculating P2P dists...")
         q_q_dist = 1 - np.dot(query_features, query_features.T)
+        print("calculating G2G dists...")
         g_g_dist = 1 - np.dot(gallery_features, gallery_features.T)
     else:
         raise ValueError("Invalid metric!")
 
+    del gallery_features
+    del query_features
+
+    print("re-ranking...")
     final_dist = re_ranking(q_g_dist, q_q_dist, g_g_dist, k1, k2, lambda_value, hop2=hop2)
 
     rank_list = np.argsort(final_dist, axis=1)
