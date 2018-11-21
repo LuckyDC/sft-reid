@@ -392,14 +392,15 @@ class Pad:
         assert isinstance(padding, (int, tuple))
         assert isinstance(fill_value, (numbers.Number, str, tuple))
 
+		self.padding = padding
+        self.fill_value = fill_value
+        self.padding_mode = padding_mode
+
+	
         if isinstance(self.padding, int):
             self.padding = [padding] * 4
         elif isinstance(self.padding, collections.Iterable) and len(self.padding) == 2:
             self.padding = [padding[0], padding[0], padding[1], padding[1]]
-
-        self.padding = padding
-        self.fill_value = fill_value
-        self.padding_mode = padding_mode
 
     def __call__(self, img):
         return cv2.copyMakeBorder(img, *self.padding, borderType=self.padding_mode, value=self.fill_value)
