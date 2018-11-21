@@ -4,15 +4,16 @@
 p_size: 16
 k_size: 8
 
-gpus: [3]
+gpus: [0]
 memonger: false
 # settings for optimizer
+optimizer: sgd
 lr: 0.1
 wd: 0.0005
 lr_step: [80,100]
 
 #settings for data
-dataset: msmt
+dataset: duke
 image_size: [256,128]
 
 random_mirror: true
@@ -21,7 +22,7 @@ random_erase: true
 
 
 #settings for model
-prefix: baseline-sft0.1-dsup
+prefix: baseline-un
 network: resnet_s16
 
 model_load_prefix: pretrain_models/resnet-50
@@ -34,7 +35,6 @@ num_epoch: 140
 use_sft: true
 deep_sup: true
 temperature: 0.1
-share_classifier: true
 
 
 # settings for base architecture

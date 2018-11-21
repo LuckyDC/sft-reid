@@ -70,7 +70,7 @@ def sft_module(data, temperature):
     return feat, sim
 
 
-def my_classifier(data, num_id, bottleneck_dims):
+def my_classifier(data, num_id, bottleneck_dims, name=""):
     '''
     Our classifier with bottleneck design. Users can implement customized classifier.
 
@@ -82,6 +82,8 @@ def my_classifier(data, num_id, bottleneck_dims):
         The number of identities.
     bottleneck_dims : Int
         The dimensionality of the bottleneck FC layer.
+    name : String
+        Additional prefix.
 
     Returns
     -------
@@ -94,7 +96,7 @@ def my_classifier(data, num_id, bottleneck_dims):
 
     l2 = mx.symbol.L2Normalization(act)
 
-    cls_weight = mx.symbol.Variable("cls_weight", shape=(num_id, bottleneck_dims))
+    cls_weight = mx.symbol.Variable("%s_cls_weight" % name, shape=(num_id, bottleneck_dims))
     cls_weight = mx.symbol.L2Normalization(cls_weight)
     logits = mx.symbol.FullyConnected(data=l2, weight=cls_weight, num_hidden=num_id, no_bias=True)
 

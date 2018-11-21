@@ -23,7 +23,6 @@ def build_network(symbol, **kwargs):
     softmax_margin = kwargs.get("softmax_margin", 0.5)
     batch_size = kwargs.get("batch_size", 0)
     use_sft = kwargs.get("use_sft", False)
-    share_classifier = kwargs.get("share_classifier", False)
     temperature = kwargs.get("temperature", 1.0)
     deep_sup = kwargs.get("deep_sup", False)
     bottleneck_dims = kwargs.get("bottleneck_dims", 512)
@@ -43,15 +42,8 @@ def build_network(symbol, **kwargs):
                                     name="amsoftmax")
     else:
         if deep_sup:
-            if share_classifier:
-                concat = mx.symbol.concat(flatten, flatten_sft, dim=0)
-                logits = my_classifier(concat, num_id=num_id, bottleneck_dims=bottleneck_dims)
-
-            else:
-                logits = my_classifier(flatten, num_id=num_id, bottleneck_dims=bottleneck_dims)
-                logits_sft = my_classifier(flatten_sft, num_id=num_id, bottleneck_dims=bottleneck_dims)
-
-                logits = mx.symbol.concat(logits, logits_sft, dim=0)
+            concat = mx.symbol.concat(flatten, flatten_sft, dim=0)
+            logits = my_classifier(concat, num_id=num_id, bottleneck_dims=bottleneck_dims)
 
             label = mx.symbol.tile(label, reps=2)
             amsoftmax = AMSoftmaxOutput(logits, label, num_id=num_id, margin=softmax_margin, scale=norm_scale,
@@ -131,12 +123,14 @@ if __name__ == '__main__':
                                                         warmup_begin_lr=args.lr / 100,
                                                         warmup_mode='linear')
 
-    optimizer = mx.optimizer.SGD(learning_rate=args.lr,
-                                 wd=args.wd,
-                                 momentum=0.9,
-                                 lr_scheduler=lr_scheduler,
-                                 rescale_grad=1 / batch_size,
-                                 begin_num_update=args.begin_epoch * train.size)
+    optimizer = args.optimizer
+
+    optimizer_params = {"learning_rate": args.lr,
+                        "wd": args.wd,
+                        "momentum": 0.9,
+                        "lr_scheduler": lr_scheduler,
+                        "rescale_grad": 1 / batch_size,
+                        "begin_num_update": args.begin_epoch * train.size}
 
     # Metric
     metric_list = []
@@ -174,6 +168,7 @@ if __name__ == '__main__':
               allow_missing=True,
               initializer=init,
               optimizer=optimizer,
+              optimizer_params=optimizer_params,
               num_epoch=args.num_epoch,
               begin_epoch=args.begin_epoch,
               batch_end_callback=mx.callback.Speedometer(batch_size=batch_size, frequent=10),

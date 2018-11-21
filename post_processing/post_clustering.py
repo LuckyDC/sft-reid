@@ -3,7 +3,6 @@ import argparse
 import numpy as np
 import scipy.io as sio
 
-from sklearn.metrics import euclidean_distances
 from sklearn.preprocessing import normalize
 from tqdm import tqdm
 from easydict import EasyDict
