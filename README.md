@@ -24,6 +24,8 @@
 decompress them.
 You should separate Market-1501 distractors into 3 subsets(100k,100k,300k) before evaluating on it.
 
+Download pretrained [resnet-50](http://data.dmlc.ml/mxnet/models/imagenet/resnet/50-layers/) to pretrain_models/ directory. 
+
 ### Training
 You can modify the configuration file `config.yml` before training.
 Then run
