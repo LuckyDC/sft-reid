@@ -45,9 +45,8 @@ def build_network(symbol, **kwargs):
             concat = mx.symbol.concat(flatten, flatten_sft, dim=0)
             logits = my_classifier(concat, num_id=num_id, bottleneck_dims=bottleneck_dims)
 
-            label = mx.symbol.tile(label, reps=2)
-            amsoftmax = AMSoftmaxOutput(logits, label, num_id=num_id, margin=softmax_margin, scale=norm_scale,
-                                        name="amsoftmax")
+            amsoftmax = AMSoftmaxOutput(logits, mx.symbol.tile(label, reps=2), num_id=num_id, margin=softmax_margin,
+                                        scale=norm_scale, name="amsoftmax")
 
         else:
             logits = my_classifier(flatten_sft, num_id=num_id, bottleneck_dims=bottleneck_dims)
@@ -56,7 +55,7 @@ def build_network(symbol, **kwargs):
                                         name="amsoftmax")
 
     # triplet loss
-    triplet = triplet_hard_loss(flatten, label, margin=triplet_margin, batch_size=batch_size)
+    triplet = triplet_hard_loss(flatten, label, margin=triplet_margin, batch_size=batch_size, name="triplet")
 
     # output group
     group = []
@@ -150,7 +149,7 @@ if __name__ == '__main__':
     _, arg_params, aux_params = mx.model.load_checkpoint('%s' % args.model_load_prefix, args.model_load_epoch)
     symbol = importlib.import_module('symbols.symbol_' + args.network).get_symbol()
 
-    net = build_network(symbol=symbol, **args)
+    net = build_network(symbol=symbol, batch_size=batch_size, **args)
 
     model = mx.mod.Module(symbol=net, data_names=train.data_names, label_names=train.label_names, context=devices,
                           logger=logger)

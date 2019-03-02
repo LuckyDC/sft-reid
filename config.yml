@@ -4,7 +4,7 @@
 p_size: 16
 k_size: 8
 
-gpus: [0]
+gpus: [2]
 memonger: false
 # settings for optimizer
 optimizer: sgd
@@ -22,18 +22,18 @@ random_erase: true
 
 
 #settings for model
-prefix: baseline-un
+prefix: baseline-triplet1.0
 network: resnet_s16
 
 model_load_prefix: pretrain_models/resnet-50
 model_load_epoch: 0
 
-begin_epoch: 0
+begin_epoch: 1
 num_epoch: 140
 
 # settings for components
-use_sft: true
-deep_sup: true
+use_sft: false
+deep_sup: false
 temperature: 0.1
 
 
@@ -41,10 +41,10 @@ temperature: 0.1
 bottleneck_dims: 512
 
 #settings for loss function
-use_triplet: false
+use_triplet: true
 triplet_margin: 1.0
 
-use_softmax: true
+use_softmax: false
 softmax_margin: 0.3
 norm_scale: 15
 
@@ -53,7 +53,7 @@ norm_scale: 15
 # duke
 duke: {
   num_id: 702,  #The number of identities for training.
-  root: /mnt/truenas/scratch/chuanchen.luo/data/reid/DukeMTMC-reID-ssd,
+  root: /home/chuanchen_luo/data/DukeMTMC-reID,
   train: bounding_box_train,
   gallery: bounding_box_test,
   query: query
@@ -62,7 +62,7 @@ duke: {
 # market-1501
 market: {
   num_id: 751,   #The number of identities for training.
-  root: /mnt/truenas/scratch/chuanchen.luo/data/reid/Market-1501-v15.09.15-ssd,
+  root: /home/chuanchen_luo/data/Market-1501-v15.09.15,
   train: bounding_box_train,
   gallery: bounding_box_test,
   query: query,
@@ -72,7 +72,7 @@ market: {
 # cuhk-03
 cuhk: {
   num_id: 767,   #The number of identities for training.
-  root: /mnt/truenas/scratch/chuanchen.luo/data/reid/cuhk03-np-ssd/labeled,
+  root: /home/chuanchen_luo/data/cuhk03-np/labeled,
   train: bounding_box_train,
   gallery: bounding_box_test,
   query: query
@@ -80,7 +80,7 @@ cuhk: {
 
 msmt: {
   num_id: 1041,   #The number of identities for training.
-  root: /mnt/truenas/scratch/chuanchen.luo/data/reid/MSMT17_V1-ssd,
+  root: /home/chuanchen_luo/data/MSMT17_V1,
   train: train,
   gallery: list_gallery.txt,
   query: list_query.txt

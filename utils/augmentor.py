@@ -392,11 +392,10 @@ class Pad:
         assert isinstance(padding, (int, tuple))
         assert isinstance(fill_value, (numbers.Number, str, tuple))
 
-		self.padding = padding
+        self.padding = padding
         self.fill_value = fill_value
         self.padding_mode = padding_mode
 
-	
         if isinstance(self.padding, int):
             self.padding = [padding] * 4
         elif isinstance(self.padding, collections.Iterable) and len(self.padding) == 2:
