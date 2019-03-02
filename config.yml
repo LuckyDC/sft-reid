@@ -4,7 +4,7 @@
 p_size: 16
 k_size: 8
 
-gpus: [2]
+gpus: [3]
 memonger: false
 # settings for optimizer
 optimizer: sgd
@@ -22,7 +22,7 @@ random_erase: true
 
 
 #settings for model
-prefix: baseline-triplet1.0
+prefix: baseline-sft-dsup
 network: resnet_s16
 
 model_load_prefix: pretrain_models/resnet-50
@@ -32,8 +32,8 @@ begin_epoch: 1
 num_epoch: 140
 
 # settings for components
-use_sft: false
-deep_sup: false
+use_sft: true
+deep_sup: true
 temperature: 0.1
 
 
@@ -41,10 +41,10 @@ temperature: 0.1
 bottleneck_dims: 512
 
 #settings for loss function
-use_triplet: true
+use_triplet: false
 triplet_margin: 1.0
 
-use_softmax: false
+use_softmax: true
 softmax_margin: 0.3
 norm_scale: 15
 
